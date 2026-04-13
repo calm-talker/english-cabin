@@ -1,10 +1,15 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
-// 数据库初始化（替换成你自己的两个密钥！）
+<script>
+// 就放这里！！！
 const supabase = supabase.createClient(
-  "https://pzrcxtiviprrwvmmor.supabase.co",eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cmN4dGl2aXBycnd2dnhtbW9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwNTE2OTEsImV4cCI6MjA5MTYyNzY5MX0.H6xpLQvJKF4qZhQeuNSfX_Tf0-MDwIpyNOQWTe7MArg
-  "你从Supabase复制的anon public key"
+  "https://pzrcxtiviprrwvmmor.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cmN4dGl2aXBycnd2dnhtbW9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwNTE2OTEsImV4cCI6MjA5MTYyNzY5MX0.H6xpLQvJKF4qZhQeuNSfX_Tf0-MDwIpyNOQWTe7MArg"
 );
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+...
+</script>
 
 class EnglishCabinPro {
     constructor() {
