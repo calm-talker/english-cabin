@@ -1,427 +1,263 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>沉浸式英语舱 · 智能轮询对话版</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { background: linear-gradient(145deg, #f9fafc 0%, #eef2f7 100%); font-family: 'Inter', sans-serif; min-height: 100vh; padding: 24px 20px; color: #1e2f3f; }
-        .immersive-app { max-width: 1400px; margin: 0 auto; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border-radius: 2rem; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05); border: 1px solid rgba(255, 255, 255, 0.6); padding: 2rem; }
-        .dashboard-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem; }
-        .stat-card { background: #ffffffdd; backdrop-filter: blur(4px); border-radius: 2rem; padding: 1.5rem 1.8rem; display: flex; align-items: center; gap: 1.2rem; border: 1px solid rgba(255,255,255,0.7); transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.02); }
-        .stat-icon { width: 56px; height: 56px; background: #fef3e8; border-radius: 1.5rem; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; }
-        .stat-icon.green { background: #e8f6ef; }
-        .stat-content h3 { font-size: 2rem; font-weight: 700; color: #1e2f3f; line-height: 1.2; }
-        .stat-content p { color: #7e95aa; font-weight: 500; font-size: 0.85rem; }
-        .top-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; }
-        .scene-cards { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-        .scene-btn { background: #ffffffcc; border: 1px solid #cfdfed; padding: 8px 20px; border-radius: 60px; font-weight: 600; font-size: 0.85rem; color: #2c5a7a; cursor: pointer; transition: all 0.2s; }
-        .scene-btn.active { background: #6c9fd1; color: white; border-color: #6c9fd1; box-shadow: 0 6px 14px rgba(108, 159, 209, 0.25); }
-        .custom-scene-group { display: flex; background: #ffffffcc; border-radius: 60px; border: 1px solid #cfdfed; padding: 4px 6px; }
-        .custom-input { background: none; border: none; padding: 0 15px; width: 140px; outline: none; font-size: 0.85rem; color: #1e3a5f; }
-        .ambient-control { display: flex; align-items: center; gap: 12px; background: #ffffffcc; padding: 6px 20px; border-radius: 60px; border: 1px solid #cfdfed; }
-        .vol-slider { accent-color: #6c9fd1; width: 100px; cursor: pointer; }
-        .main-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 2rem; margin-bottom: 2rem; }
-        @media (max-width: 1000px) { .main-grid { grid-template-columns: 1fr; } }
-        .sentence-panel { background: #ffffffdd; backdrop-filter: blur(4px); border-radius: 1.8rem; padding: 2rem; border: 1px solid #ffffff; }
-        .video-scene { background: #eef3fc; border-radius: 1.2rem; padding: 0.8rem 1.2rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; border: 1px solid #cde0ef; min-height: 100px; transition: all 0.4s ease; position: relative; overflow: hidden; }
-        .video-scene.cafe { background: linear-gradient(to right, #f8f0e3, #f6eade); }
-        .video-scene.airport { background: linear-gradient(to right, #e3f0f8, #ddeef7); }
-        .video-scene.shopping { background: linear-gradient(to right, #f8e3f5, #f6def4); }
-        .video-scene.daily { background: linear-gradient(to right, #e3f8e9, #dff7e6); }
-        .video-scene.office { background: linear-gradient(to right, #f2f4f8, #e9edf5); }
-        .avatar { display: flex; flex-direction: column; align-items: center; gap: 6px; z-index: 2; }
-        .avatar-icon { width: 56px; height: 56px; background: #6c9fd1; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; transition: 0.1s; position: relative; z-index: 2; }
-        .avatar-speaking { animation: bounceTalk 0.6s infinite ease; background: #8bb5e0; box-shadow: 0 0 0 3px rgba(108,159,209,0.4); }
-        @keyframes bounceTalk { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
-        .chat-bubble { background: white; padding: 10px 14px; border-radius: 18px; font-size: 0.9rem; max-width: 70%; box-shadow: 0 4px 10px rgba(0,0,0,0.05); animation: fadeIn 0.4s ease; z-index: 2; }
-        @keyframes fadeIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: translateY(0); } }
-        .video-description { flex: 1; font-size: 0.85rem; color: #2c5a7a; z-index: 2; }
-        .play-video-btn { background: #c8e6df; border: none; padding: 8px 18px; border-radius: 40px; font-weight: 600; color: #2c6e5c; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 0.8rem; z-index: 2; transition: 0.1s; }
-        .sentence-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 8px; }
-        .difficulty-tag, .stats-badge { background: #eef3fc; padding: 4px 14px; border-radius: 40px; font-size: 0.75rem; font-weight: 600; }
-        .stats-badge { background: #fef5e7; color: #c97e2c; }
-        .target-sentence { font-size: 1.8rem; font-weight: 700; line-height: 1.4; color: #1f3b4c; margin-bottom: 1rem; word-break: break-word; }
-        .word-token { display: inline-block; padding: 0 2px; margin: 2px 1px; cursor: pointer; border-radius: 6px; transition: all 0.2s; }
-        .word-token.speaking { background: #ffef99; transform: scale(1.08); }
-        .word-perfect { background: #dcfce7; border-bottom: 2px solid #48bb78; }
-        .word-blurry { background: #fef9c3; border-bottom: 2px solid #eab308; }
-        .word-wrong { background: #fee2e2; border-bottom: 2px solid #f87171; text-decoration: line-through; }
-        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 1rem; align-items: center; }
-        .action-btn { background: #ecf3f9; border: none; padding: 10px 22px; border-radius: 60px; color: #2c5a7a; cursor: pointer; font-weight: 600; transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem; }
-        .action-btn:hover { background: #e2eaf2; transform: translateY(-1px); }
-        .btn-primary { background: #6c9fd1; color: white; }
-        .btn-primary:hover { background: #5a8cbc; }
-        .btn-rec { background: #ffd6cc; color: #b45a3b; }
-        .voice-selector { background: #ffffff; border: 1px solid #cfdfed; border-radius: 60px; padding: 8px 16px; font-size: 0.8rem; color: #2c5a7a; outline: none; cursor: pointer; font-weight: 500; }
-        .control-panel { display: flex; flex-direction: column; gap: 1.5rem; }
-        .interaction-block { background: #ffffffdd; backdrop-filter: blur(4px); border-radius: 1.5rem; padding: 1.5rem; border: 1px solid #ffffff; }
-        .text-area { width: 100%; background: #fefefe; border: 1px solid #dce5ef; border-radius: 1rem; padding: 12px; color: #1e2f3f; font-family: inherit; resize: vertical; }
-        .ocr-upload-section { background: #ffffffdd; backdrop-filter: blur(4px); border-radius: 1.5rem; padding: 1.5rem; margin-top: 1rem; border: 1px solid #ffffff; }
-        .ocr-dropzone { border: 2px dashed #c8d8e8; border-radius: 1.2rem; padding: 1.2rem; text-align: center; background: #fafcff; cursor: pointer; transition: 0.2s; }
-        .ocr-dropzone:hover { background: #f0f5fa; border-color: #6c9fd1; }
-        .ocr-result { margin-top: 1rem; background: #f8fafd; border-radius: 1rem; padding: 1rem; max-height: 200px; overflow-y: auto; }
-        .ocr-text { font-size: 0.85rem; color: #2c5a7a; white-space: pre-wrap; word-break: break-word; }
-        .add-to-library-btn { background: #6c9fd1; color: white; border: none; border-radius: 40px; padding: 6px 16px; font-size: 0.75rem; font-weight: 600; cursor: pointer; margin-top: 8px; transition: 0.1s; }
-        .custom-vocab-section { background: #ffffffdd; backdrop-filter: blur(4px); border-radius: 1.5rem; padding: 1.5rem; margin-top: 1rem; border: 1px solid #ffffff; }
-        .section-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; color: #2c5a7a; }
-        .add-item-form { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 1.5rem; }
-        .add-item-input { flex: 2; background: #fefefe; border: 1px solid #cfdfed; border-radius: 60px; padding: 10px 18px; font-family: inherit; font-size: 0.9rem; outline: none; }
-        .add-item-btn { background: #6c9fd1; color: white; border: none; border-radius: 60px; padding: 0 24px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-        .vocab-list { display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; }
-        .vocab-item { background: #f8fafd; border-radius: 60px; padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; border: 1px solid #e2edf7; }
-        .vocab-text { font-weight: 500; color: #1f3b4c; word-break: break-word; flex: 2; }
-        .vocab-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-        .vocab-btn { background: #ecf3f9; border: none; border-radius: 40px; padding: 6px 14px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: 0.1s; }
-        .vocab-btn.practice { background: #c8e6df; color: #2c6e5c; }
-        .vocab-btn.speak { background: #e9ecef; }
-        .vocab-btn.edit { background: #fff0d6; color: #c97e2c; }
-        .vocab-btn.delete { background: #ffe6e3; color: #c25a3a; }
-        .vocab-btn:hover { transform: translateY(-1px); filter: brightness(0.96); }
-        .empty-tip { color: #8ba0ae; text-align: center; padding: 24px; font-style: italic; }
-        .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #fef9e3; color: #b45a3b; padding: 10px 24px; border-radius: 60px; z-index: 1000; display: none; font-size: 0.85rem; box-shadow: 0 6px 18px rgba(0,0,0,0.08); border-left: 4px solid #ffb347; max-width: 90vw; text-align: center; }
-        .score-detail { font-size: 0.85rem; margin-top: 8px; background: #f9fbfd; padding: 8px; border-radius: 16px; }
-        .loading-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #ddd; border-top-color: #6c9fd1; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 8px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-        .difficulty-badge { background: #e0edf9; margin-left: 8px; cursor: pointer; }
-        .difficulty-badge:hover { background: #cddff0; }
-    </style>
-</head>
-<body>
-<div class="immersive-app">
-    <div class="dashboard-stats">
-        <div class="stat-card"><div class="stat-icon">📚</div><div class="stat-content"><h3 id="statCapsules">0</h3><p>Capsules · 场景胶囊</p></div></div>
-        <div class="stat-card"><div class="stat-icon green">🎯</div><div class="stat-content"><h3 id="statWordsLearned">0</h3><p>Words Learned · 已学词句</p></div></div>
-        <div class="stat-card"><div class="stat-icon">🔥</div><div class="stat-content"><h3 id="statStreak">0%</h3><p>Streak · 连续正确率</p></div></div>
-    </div>
-    <div class="top-bar">
-        <div class="scene-cards" id="sceneSelectors">
-            <button class="scene-btn active" data-scene="cafe">☕ 咖啡馆</button>
-            <button class="scene-btn" data-scene="airport">✈️ 机场</button>
-            <button class="scene-btn" data-scene="shopping">🛍️ 购物</button>
-            <button class="scene-btn" data-scene="daily">🏠 日常</button>
-            <button class="scene-btn" data-scene="office">💼 商务</button>
-            <div class="custom-scene-group">
-                <input type="text" id="customSceneInput" placeholder="面试 / 科技会议" class="custom-input">
-                <button class="scene-btn" id="customAddBtn">✨ AI生成场景</button>
-            </div>
-        </div>
-        <div class="ambient-control">
-            <span>🎧 环境氛围</span>
-            <span id="sceneLabel">咖啡馆</span>
-            <input type="range" id="volRange" class="vol-slider" min="0" max="100" value="30">
-            <span id="volVal">30%</span>
-        </div>
-    </div>
-    <div class="main-grid">
-        <div class="sentence-panel">
-            <div class="video-scene" id="videoSceneBox">
-                <div class="avatar">
-                    <div class="avatar-icon" id="avatarIcon">🧑‍🎤</div>
-                    <span style="font-size:0.7rem;">AI 伙伴</span>
-                </div>
-                <div class="video-description" id="videoDesc">🎬 智能轮询 · 动态难度</div>
-                <button class="play-video-btn" id="playSceneVideoBtn">🎬 播放对话 · 情景再现</button>
-            </div>
-            <div class="sentence-meta">
-                <span class="difficulty-tag" id="difficultyLabel">🧘 动态难度 · 基础</span>
-                <span class="stats-badge" id="statsBadge">🔥 连对 0 | 🏆 完美 0</span>
-            </div>
-            <div class="target-sentence" id="displaySentence">Loading...</div>
-            <div class="btn-group">
-                <select id="voiceSelector" class="voice-selector"></select>
-                <button class="action-btn" id="playVoiceBtn">🔊 朗读当前句子</button>
-                <button class="action-btn btn-primary" id="nextSentenceBtn">✨ 换一句</button>
-                <button class="action-btn btn-translate" id="translateBtn">🇨🇳 翻译中文</button>
-                <button class="action-btn" id="adjustDifficultyBtn">⚙️ 切换难度(手动)</button>
-            </div>
-        </div>
-        <div class="control-panel">
-            <div class="interaction-block">
-                <div style="font-size:0.85rem; margin-bottom:0.8rem;">🎤 录音 → 停止后AI智能评分 (影响动态难度 & 句子掌握度)</div>
-                <textarea id="recordingInput" class="text-area" placeholder="你的录音文本将显示在这里..." readonly></textarea>
-                <div class="btn-group">
-                    <button class="action-btn btn-rec" id="recordBtn">🎤 开始录音</button>
-                    <button class="action-btn" id="stopBtn" disabled>⏹️ 停止并评分</button>
-                    <button class="action-btn btn-primary" id="textCheckBtn">✅ 文本校验</button>
-                </div>
-                <div id="scorePanelPlaceholder"></div>
-            </div>
-        </div>
-    </div>
-    <div class="ocr-upload-section">
-        <div class="section-title">📷 图片/PDF 英文识别 · 自动过滤中文</div>
-        <div class="ocr-dropzone" id="ocrDropzone">📂 点击或拖拽上传文件 (支持 JPG, PNG, PDF)
-            <input type="file" id="fileInput" accept="image/jpeg,image/png,application/pdf" style="display:none;" multiple>
-        </div>
-        <div id="ocrResultArea" class="ocr-result" style="display:none;">
-            <div style="font-weight:600;">📝 识别结果（已过滤中文）：</div>
-            <div id="ocrTextDisplay" class="ocr-text"></div>
-            <button id="addOcrToLibrary" class="add-to-library-btn">➕ 加入我的词句库</button>
-        </div>
-    </div>
-    <div class="custom-vocab-section">
-        <div class="section-title">📚 我的单词/句子库 · 智能轮询自动融入</div>
-        <div class="add-item-form">
-            <input type="text" id="newVocabInput" class="add-item-input" placeholder="输入单词或短句 (将自动加入主轮询池)">
-            <button id="addVocabBtn" class="add-item-btn">➕ 添加</button>
-        </div>
-        <div id="vocabListContainer" class="vocab-list"><div class="empty-tip">✨ 还没有内容，添加上方的单词或句子开始练习吧～</div></div>
-    </div>
-</div>
-<div class="toast" id="toastMsg"></div>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
-<script>
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+// 数据库初始化（替换成你自己的两个密钥！）
+const supabase = supabase.createClient(
+  "https://pzrcxtiviprrwvmmor.supabase.co",eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cmN4dGl2aXBycnd2dnhtbW9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwNTE2OTEsImV4cCI6MjA5MTYyNzY5MX0.H6xpLQvJKF4qZhQeuNSfX_Tf0-MDwIpyNOQWTe7MArg
+  "你从Supabase复制的anon public key"
+);
 
-    class EnglishCabinPro {
-        constructor() {
-            this.currentSentence = "";
-            this.currentScene = "cafe";
-            this.difficultyLevel = "junior";        // 当前场景动态难度
-            this.sceneDifficultyMap = new Map();    // 每个场景独立难度: 'cafe' -> 'intermediate'
-            this.availableVoices = [];
-            this.selectedVoice = null;
-            this.streak = 0;
-            this.perfectCount = 0;
-            this.isRecording = false;
-            this.customVocabList = [];               // { id, text }
-            this.builtinScenes = ["cafe", "airport", "shopping", "daily", "office"];
-            this.customSceneIds = [];
-            
-            // 智能轮询核心: 句子错误/弱项池 (句子原文 -> 失败次数)
-            this.sentenceErrorMap = new Map();        // 记录评分低于70%的次数
-            this.sentenceCorrectMap = new Map();      // 正确次数（辅助重置错误权重）
-            
-            // 场景历史避免连续重复
-            this.sceneHistory = new Map(); 
-            
-            this.initCorpus();
-            this.init();
-            this.initOCR();
-        }
+class EnglishCabinPro {
+    constructor() {
+        this.currentSentence = "";
+        this.currentScene = "cafe";
+        this.difficultyLevel = "junior";        // 当前场景动态难度
+        this.sceneDifficultyMap = new Map();    // 每个场景独立难度: 'cafe' -> 'intermediate'
+        this.availableVoices = [];
+        this.selectedVoice = null;
+        this.streak = 0;
+        this.perfectCount = 0;
+        this.isRecording = false;
+        this.customVocabList = [];               // { id, text }
+        this.builtinScenes = ["cafe", "airport", "shopping", "daily", "office"];
+        this.customSceneIds = [];
+        
+        // 智能轮询核心: 句子错误/弱项池 (句子原文 -> 失败次数)
+        this.sentenceErrorMap = new Map();        // 记录评分低于70%的次数
+        this.sentenceCorrectMap = new Map();      // 正确次数（辅助重置错误权重）
+        
+        // 场景历史避免连续重复
+        this.sceneHistory = new Map(); 
+        
+        this.initCorpus();
+        this.init();
+        this.initOCR();
+        // 页面加载时从数据库拉取自定义词句
+        this.loadVocabFromDB();
+    }
 
-        initCorpus() {
-            this.corpus = {
-                cafe: { junior: ["I'd like a coffee, please.", "Can I have a latte with oat milk?", "One cappuccino to go, thank you.", "Is this seat taken?", "Do you have any decaf options?"], intermediate: ["Could you recommend a special blend today?", "I prefer my espresso with a hint of cinnamon.", "What's the difference between a flat white and a latte?", "Could I get an extra shot of vanilla syrup?", "The croissant here is freshly baked, isn't it?"], advanced: ["The single-origin Ethiopian beans produce a floral aroma, exquisite.", "I'd appreciate a pour-over using the light roast, please.", "Could you grind these beans for a French press?", "The tasting notes mention citrus and dark chocolate, delightful.", "I'm a regular here; could I have my loyalty card stamped?"] },
-                airport: { junior: ["Where is gate 12?", "Is my flight on time?", "I need to check in my luggage.", "Can I have a window seat?", "Where can I find the baggage claim?"], intermediate: ["Could I get a window seat upgrade?", "I need to check two bags for international travel.", "What's the boarding time for flight BA207?", "Is there a lounge for business class passengers?", "My connecting flight is tight; can you assist me?"], advanced: ["Due to turbulence, the captain has turned on the fasten seatbelt sign.", "I'd like to confirm my gluten-free meal for the long-haul flight.", "Could you please rebook me on the next available flight?", "The duty-free allowance for this destination is quite generous.", "May I have a priority tag for my carry-on?"] },
-                shopping: { junior: ["How much is this?", "Can I try this on?", "Do you accept credit cards?", "I'm just looking, thanks.", "Where is the fitting room?"], intermediate: ["Does this come in a larger size?", "I'm looking for a cashmere sweater under $100.", "Is there a discount if I buy two?", "Could you gift wrap this for me?", "What's your return policy?"], advanced: ["The return policy states a full refund within thirty days with receipt.", "I'd like to price match this item with your online store.", "This fabric feels premium, but is it machine washable?", "Could you check if you have this in stock in navy blue?", "I'm a loyalty member; can I apply my points today?"] },
-                daily: { junior: ["I'm tired today.", "Let's watch a movie.", "What's the weather like?", "I need to do some laundry.", "Let's order pizza for dinner."], intermediate: ["I'll grab some groceries on my way back.", "What's your plan for the weekend?", "I've been feeling a bit under the weather lately.", "Could you water the plants while I'm away?", "Let's meet at the park around 3 PM."], advanced: ["The sunset over the hills was absolutely breathtaking, a moment to cherish.", "I've decided to take up meditation to reduce daily stress.", "Could you kindly turn down the music? I need to focus on work.", "The new café down the street has become my favorite remote workspace.", "I'm planning to renovate the kitchen next month; any advice?"] },
-                office: { junior: ["Can I have a day off?", "Where is the meeting room?", "I'll send you the file by email.", "Could you print these documents?", "The printer is out of paper."], intermediate: ["Please review the quarterly report by Friday.", "Let's sync up after lunch about the client feedback.", "I've attached the revised budget for your approval.", "Could we reschedule the 2 PM meeting to tomorrow?", "The deadline has been moved to next Monday."], advanced: ["The synergy between our teams accelerated the project roadmap dramatically.", "We need to leverage data analytics to optimize our conversion funnel.", "I'll circulate the minutes of today's discussion by EOD.", "Let's adopt an agile methodology for the upcoming sprint.", "The stakeholder alignment meeting is crucial for the Q3 strategy."] }
-            };
-        }
-
-        async init() {
-            this.bindDom();
-            await this.loadVoices();
-            // 初始化场景难度
-            for(let scene of this.builtinScenes) this.sceneDifficultyMap.set(scene, "junior");
-            this.difficultyLevel = this.sceneDifficultyMap.get(this.currentScene);
-            this.updateDifficultyUI();
-            this.loadNewSentence(); 
-            this.attachEvents();
-            this.setupSpeechRecognition();
+    // 从数据库加载自定义词句
+    async loadVocabFromDB() {
+        const { data, error } = await supabase
+            .from('user_vocab')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (data) {
+            this.customVocabList = data.map(item => ({ id: item.id, text: item.content }));
             this.renderCustomVocab();
             this.updateDashboard();
         }
+    }
 
-        bindDom() {
-            this.el = {
-                displaySentence: document.getElementById('displaySentence'),
-                videoSceneBox: document.getElementById('videoSceneBox'),
-                avatarIcon: document.getElementById('avatarIcon'),
-                videoDesc: document.getElementById('videoDesc'),
-                playSceneVideoBtn: document.getElementById('playSceneVideoBtn'),
-                voiceSelector: document.getElementById('voiceSelector'),
-                sceneLabel: document.getElementById('sceneLabel'),
-                recordBtn: document.getElementById('recordBtn'),
-                stopBtn: document.getElementById('stopBtn'),
-                recordingInput: document.getElementById('recordingInput'),
-                textCheckBtn: document.getElementById('textCheckBtn'),
-                scorePanelPlaceholder: document.getElementById('scorePanelPlaceholder'),
-                difficultyLabel: document.getElementById('difficultyLabel'),
-                statsBadge: document.getElementById('statsBadge'),
-                nextSentenceBtn: document.getElementById('nextSentenceBtn'),
-                playVoiceBtn: document.getElementById('playVoiceBtn'),
-                translateBtn: document.getElementById('translateBtn')
-            };
-        }
+    initCorpus() {
+        this.corpus = {
+            cafe: { junior: ["I'd like a coffee, please.", "Can I have a latte with oat milk?", "One cappuccino to go, thank you.", "Is this seat taken?", "Do you have any decaf options?"], intermediate: ["Could you recommend a special blend today?", "I prefer my espresso with a hint of cinnamon.", "What's the difference between a flat white and a latte?", "Could I get an extra shot of vanilla syrup?", "The croissant here is freshly baked, isn't it?"], advanced: ["The single-origin Ethiopian beans produce a floral aroma, exquisite.", "I'd appreciate a pour-over using the light roast, please.", "Could you grind these beans for a French press?", "The tasting notes mention citrus and dark chocolate, delightful.", "I'm a regular here; could I have my loyalty card stamped?"] },
+            airport: { junior: ["Where is gate 12?", "Is my flight on time?", "I need to check in my luggage.", "Can I have a window seat?", "Where can I find the baggage claim?"], intermediate: ["Could I get a window seat upgrade?", "I need to check two bags for international travel.", "What's the boarding time for flight BA207?", "Is there a lounge for business class passengers?", "My connecting flight is tight; can you assist me?"], advanced: ["Due to turbulence, the captain has turned on the fasten seatbelt sign.", "I'd like to confirm my gluten-free meal for the long-haul flight.", "Could you please rebook me on the next available flight?", "The duty-free allowance for this destination is quite generous.", "May I have a priority tag for my carry-on?"] },
+            shopping: { junior: ["How much is this?", "Can I try this on?", "Do you accept credit cards?", "I'm just looking, thanks.", "Where is the fitting room?"], intermediate: ["Does this come in a larger size?", "I'm looking for a cashmere sweater under $100.", "Is there a discount if I buy two?", "Could you gift wrap this for me?", "What's your return policy?"], advanced: ["The return policy states a full refund within thirty days with receipt.", "I'd like to price match this item with your online store.", "This fabric feels premium, but is it machine washable?", "Could you check if you have this in stock in navy blue?", "I'm a loyalty member; can I apply my points today?"] },
+            daily: { junior: ["I'm tired today.", "Let's watch a movie.", "What's the weather like?", "I need to do some laundry.", "Let's order pizza for dinner."], intermediate: ["I'll grab some groceries on my way back.", "What's your plan for the weekend?", "I've been feeling a bit under the weather lately.", "Could you water the plants while I'm away?", "Let's meet at the park around 3 PM."], advanced: ["The sunset over the hills was absolutely breathtaking, a moment to cherish.", "I've decided to take up meditation to reduce daily stress.", "Could you kindly turn down the music? I need to focus on work.", "The new café down the street has become my favorite remote workspace.", "I'm planning to renovate the kitchen next month; any advice?"] },
+            office: { junior: ["Can I have a day off?", "Where is the meeting room?", "I'll send you the file by email.", "Could you print these documents?", "The printer is out of paper."], intermediate: ["Please review the quarterly report by Friday.", "Let's sync up after lunch about the client feedback.", "I've attached the revised budget for your approval.", "Could we reschedule the 2 PM meeting to tomorrow?", "The deadline has been moved to next Monday."], advanced: ["The synergy between our teams accelerated the project roadmap dramatically.", "We need to leverage data analytics to optimize our conversion funnel.", "I'll circulate the minutes of today's discussion by EOD.", "Let's adopt an agile methodology for the upcoming sprint.", "The stakeholder alignment meeting is crucial for the Q3 strategy."] }
+        };
+    }
 
-        // 智能轮询核心: 结合内置语料+自定义库+错误优先级
-        getIntelligentSentence() {
-            const sceneKey = this.currentScene;
-            const diff = this.difficultyLevel;
-            let baseSentences = [];
-            if(this.corpus[sceneKey] && this.corpus[sceneKey][diff]) baseSentences = [...this.corpus[sceneKey][diff]];
-            else baseSentences = [];
-            // 加入自定义词句库 (所有自定义内容作为泛场景学习材料)
-            const customSentences = this.customVocabList.map(item => item.text).filter(t => t.trim().length > 0);
-            let allCandidates = [...baseSentences, ...customSentences];
-            if(allCandidates.length === 0) return "Let's practice English!";
-            
-            // 过滤历史（避免连续重复相同句子）
-            const historyKey = `${sceneKey}|${diff}`;
-            let history = this.sceneHistory.get(historyKey) || [];
-            const lastSentence = history.length ? history[history.length-1] : null;
-            let filtered = allCandidates.filter(s => s !== lastSentence);
-            if(filtered.length === 0) filtered = [...allCandidates];
-            
-            // 错误优先级: 找出错误次数>=1且尚未正确（最近未高分的句子）
-            let weakSentences = filtered.filter(s => (this.sentenceErrorMap.get(s) || 0) > 0);
-            if(weakSentences.length > 0) {
-                weakSentences.sort((a,b) => (this.sentenceErrorMap.get(b)||0) - (this.sentenceErrorMap.get(a)||0));
-                const selected = weakSentences[0];
-                this.updateHistory(historyKey, selected);
-                return selected;
-            }
-            // 随机抽取
-            const randomIdx = Math.floor(Math.random() * filtered.length);
-            const selected = filtered[randomIdx];
+    async init() {
+        this.bindDom();
+        await this.loadVoices();
+        // 初始化场景难度
+        for(let scene of this.builtinScenes) this.sceneDifficultyMap.set(scene, "junior");
+        this.difficultyLevel = this.sceneDifficultyMap.get(this.currentScene);
+        this.updateDifficultyUI();
+        this.loadNewSentence(); 
+        this.attachEvents();
+        this.setupSpeechRecognition();
+        this.renderCustomVocab();
+        this.updateDashboard();
+    }
+
+    bindDom() {
+        this.el = {
+            displaySentence: document.getElementById('displaySentence'),
+            videoSceneBox: document.getElementById('videoSceneBox'),
+            avatarIcon: document.getElementById('avatarIcon'),
+            videoDesc: document.getElementById('videoDesc'),
+            playSceneVideoBtn: document.getElementById('playSceneVideoBtn'),
+            voiceSelector: document.getElementById('voiceSelector'),
+            sceneLabel: document.getElementById('sceneLabel'),
+            recordBtn: document.getElementById('recordBtn'),
+            stopBtn: document.getElementById('stopBtn'),
+            recordingInput: document.getElementById('recordingInput'),
+            textCheckBtn: document.getElementById('textCheckBtn'),
+            scorePanelPlaceholder: document.getElementById('scorePanelPlaceholder'),
+            difficultyLabel: document.getElementById('difficultyLabel'),
+            statsBadge: document.getElementById('statsBadge'),
+            nextSentenceBtn: document.getElementById('nextSentenceBtn'),
+            playVoiceBtn: document.getElementById('playVoiceBtn'),
+            translateBtn: document.getElementById('translateBtn')
+        };
+    }
+
+    // 智能轮询核心: 结合内置语料+自定义库+错误优先级
+    getIntelligentSentence() {
+        const sceneKey = this.currentScene;
+        const diff = this.difficultyLevel;
+        let baseSentences = [];
+        if(this.corpus[sceneKey] && this.corpus[sceneKey][diff]) baseSentences = [...this.corpus[sceneKey][diff]];
+        else baseSentences = [];
+        // 加入自定义词句库 (所有自定义内容作为泛场景学习材料)
+        const customSentences = this.customVocabList.map(item => item.text).filter(t => t.trim().length > 0);
+        let allCandidates = [...baseSentences, ...customSentences];
+        if(allCandidates.length === 0) return "Let's practice English!";
+        
+        // 过滤历史（避免连续重复相同句子）
+        const historyKey = `${sceneKey}|${diff}`;
+        let history = this.sceneHistory.get(historyKey) || [];
+        const lastSentence = history.length ? history[history.length-1] : null;
+        let filtered = allCandidates.filter(s => s !== lastSentence);
+        if(filtered.length === 0) filtered = [...allCandidates];
+        
+        // 错误优先级: 找出错误次数>=1且尚未正确（最近未高分的句子）
+        let weakSentences = filtered.filter(s => (this.sentenceErrorMap.get(s) || 0) > 0);
+        if(weakSentences.length > 0) {
+            weakSentences.sort((a,b) => (this.sentenceErrorMap.get(b)||0) - (this.sentenceErrorMap.get(a)||0));
+            const selected = weakSentences[0];
             this.updateHistory(historyKey, selected);
             return selected;
         }
-        
-        updateHistory(key, sentence) {
-            if(!this.sceneHistory.has(key)) this.sceneHistory.set(key, []);
-            let hist = this.sceneHistory.get(key);
-            hist.push(sentence);
-            if(hist.length > 15) hist.shift();
-            this.sceneHistory.set(key, hist);
-        }
-
-        loadNewSentence() {
-            this.currentSentence = this.getIntelligentSentence();
-            this.updateDisplaySentence(this.currentSentence);
-            this.el.scorePanelPlaceholder.innerHTML = '';
-        }
-
-        updateDisplaySentence(sentence) {
-            this.el.displaySentence.innerHTML = sentence.split(' ').map(w => `<span class="word-token" data-word="${w.replace(/[.,!?]/g,'').toLowerCase()}">${w}</span>`).join(' ');
-            document.querySelectorAll('.word-token').forEach(t => { t.onclick = () => this.showToast(`📖 ${t.dataset.word}`); });
-        }
-
-        attachEvents() {
-            document.querySelectorAll('.scene-btn[data-scene]').forEach(btn => {
-                btn.onclick = () => {
-                    document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    const oldScene = this.currentScene;
-                    this.currentScene = btn.dataset.scene;
-                    this.el.sceneLabel.innerText = btn.innerText.replace(/[^a-zA-Z\u4e00-\u9fa5]/g,'');
-                    // 加载该场景独立难度
-                    this.difficultyLevel = this.sceneDifficultyMap.get(this.currentScene) || "junior";
-                    this.updateDifficultyUI();
-                    this.loadNewSentence();
-                };
-            });
-            this.el.playSceneVideoBtn.onclick = () => this.playSceneVideo();
-            this.el.nextSentenceBtn.onclick = () => this.loadNewSentence();
-            this.el.playVoiceBtn.onclick = () => this.speakSentence(this.currentSentence);
-            this.el.translateBtn.onclick = () => this.translateSentence();
-            this.el.recordBtn.onclick = () => this.startRecording();
-            this.el.stopBtn.onclick = () => this.stopAndScore();
-            this.el.textCheckBtn.onclick = () => this.checkTextManually();
-            document.getElementById('volRange').oninput = (e) => { document.getElementById('volVal').innerText = e.target.value + '%'; };
-            document.getElementById('customAddBtn').onclick = () => this.generateCustomScene();
-            document.getElementById('addVocabBtn').onclick = () => this.addCustomVocabItem();
-            document.getElementById('adjustDifficultyBtn').onclick = () => this.cycleDifficulty();
-            document.getElementById('addOcrToLibrary').onclick = () => this.addOcrToCustomLibrary();
-        }
-
-        cycleDifficulty() {
-            const levels = ["junior", "intermediate", "advanced"];
-            let idx = levels.indexOf(this.difficultyLevel);
-            idx = (idx+1) % levels.length;
-            this.difficultyLevel = levels[idx];
-            this.sceneDifficultyMap.set(this.currentScene, this.difficultyLevel);
-            this.updateDifficultyUI();
-            this.showToast(`✏️ 难度已切换至 ${this.difficultyLevel === 'junior' ? '基础' : this.difficultyLevel === 'intermediate' ? '中级' : '高级'}`);
-            this.loadNewSentence();
-        }
-
-        updateDifficultyUI() {
-            const levelMap = { junior: "🧘 基础 · 简单对话", intermediate: "⚡ 中级 · 日常表达", advanced: "🔥 高级 · 地道进阶" };
-            this.el.difficultyLabel.innerHTML = `📈 动态难度 · ${levelMap[this.difficultyLevel]}`;
-        }
-
-        playSceneVideo() {
-            if(window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-            this.el.videoSceneBox.className = `video-scene ${this.currentScene}`;
-            this.el.videoDesc.innerHTML = `<div class="chat-bubble">🎬 智能对话: "${this.currentSentence}"</div>`;
-            this.el.avatarIcon.classList.add('avatar-speaking');
-            const words = this.el.displaySentence.querySelectorAll('.word-token');
-            let idx = 0;
-            const clearHighlight = () => words.forEach(w => w.classList.remove('speaking'));
-            const utter = new SpeechSynthesisUtterance(this.currentSentence);
-            utter.voice = this.selectedVoice;
-            const highlightNext = () => {
-                if(idx >= words.length) { this.el.avatarIcon.classList.remove('avatar-speaking'); clearHighlight(); return; }
-                clearHighlight(); words[idx].classList.add('speaking'); idx++; setTimeout(highlightNext, 280);
-            };
-            utter.onstart = () => highlightNext();
-            utter.onend = () => { this.el.avatarIcon.classList.remove('avatar-speaking'); clearHighlight(); };
-            window.speechSynthesis.speak(utter);
-        }
-
-        async loadVoices() { return new Promise(resolve => { const load = () => { const v = speechSynthesis.getVoices(); if (!v.length) { setTimeout(load, 100); return; } this.availableVoices = v.filter(i => i.lang.startsWith('en')); this.selectedVoice = this.availableVoices[0]; this.populateVoiceDropdown(); resolve(); }; load(); }); }
-        populateVoiceDropdown() { this.el.voiceSelector.innerHTML = this.availableVoices.map((v, i) => `<option value="${i}">${v.name}</option>`).join(''); this.el.voiceSelector.onchange = () => { this.selectedVoice = this.availableVoices[parseInt(this.el.voiceSelector.value)]; }; }
-        speakSentence(text) { const utter = new SpeechSynthesisUtterance(text); utter.voice = this.selectedVoice; window.speechSynthesis.cancel(); window.speechSynthesis.speak(utter); }
-        translateSentence() { fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(this.currentSentence)}&langpair=en|zh`).then(r=>r.json()).then(data=>{ this.showToast(`🇨🇳 翻译：${data?.responseData?.translatedText||"失败"}`); }).catch(()=>this.showToast("⚠️ 网络异常")); }
-        setupSpeechRecognition() { const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SpeechRecognition) return; this.recognition = new SpeechRecognition(); this.recognition.lang = 'en-US'; this.recognition.onresult = (e) => { const text = e.results[0][0].transcript; this.el.recordingInput.value = text; this.performScoring(text, this.currentSentence); }; this.recognition.onend = () => { this.isRecording = false; this.updateRecUI(); }; }
-        startRecording() { if(!this.recognition) return this.showToast("浏览器不支持"); this.recognition.start(); this.isRecording = true; this.updateRecUI(); this.el.recordingInput.value = "🎤 录音中..."; }
-        stopAndScore() { this.recognition.stop(); }
-        updateRecUI() { this.el.recordBtn.disabled = this.isRecording; this.el.stopBtn.disabled = !this.isRecording; }
-        
-        performScoring(userText, targetText) {
-            const target = targetText.toLowerCase().replace(/[.,!?;]/g, '').split(' ');
-            const user = userText.toLowerCase().replace(/[.,!?;]/g, '').split(' ');
-            let correct = 0; target.forEach((w, i) => { if(user[i] === w) correct++; });
-            const score = (correct / target.length) * 100;
-            if(score > 80) { this.streak++; this.perfectCount++; } else { this.streak = 0; }
-            this.updateDashboard();
-            // 智能反馈: 更新句子掌握度
-            if(score < 70) {
-                let errCount = this.sentenceErrorMap.get(this.currentSentence) || 0;
-                this.sentenceErrorMap.set(this.currentSentence, errCount + 1);
-                this.showToast(`📉 得分 ${score.toFixed(1)}% , 此句将进入复习队列 (错误+1)`);
-            } else if(score >= 85) {
-                this.sentenceErrorMap.delete(this.currentSentence);
-                this.showToast(`🎉 完美掌握! 得分 ${score.toFixed(1)}%`);
-            } else {
-                this.showToast(`📊 得分 ${score.toFixed(1)}%`);
-            }
-            // 动态难度自适应: 基于最近3次平均表现(简单记忆最近评分)
-            if(!this.scoreHistory) this.scoreHistory = [];
-            this.scoreHistory.push(score);
-            if(this.scoreHistory.length > 3) this.scoreHistory.shift();
-            if(this.scoreHistory.length === 3) {
-                const avg = this.scoreHistory.reduce((a,b)=>a+b,0)/3;
-                const levels = ["junior","intermediate","advanced"];
-                let currentIdx = levels.indexOf(this.difficultyLevel);
-                if(avg > 85 && currentIdx < 2) { this.difficultyLevel = levels[currentIdx+1]; this.sceneDifficultyMap.set(this.currentScene, this.difficultyLevel); this.updateDifficultyUI(); this.showToast(`🚀 智能升级! 难度提升至 ${this.difficultyLevel}`); this.scoreHistory = []; }
-                else if(avg < 50 && currentIdx > 0) { this.difficultyLevel = levels[currentIdx-1]; this.sceneDifficultyMap.set(this.currentScene, this.difficultyLevel); this.updateDifficultyUI(); this.showToast(`📖 智能降级, 难度调整至 ${this.difficultyLevel} , 巩固基础`); this.scoreHistory = []; }
-            }
-            this.el.scorePanelPlaceholder.innerHTML = `<div class="score-detail">🎯 准确率: ${score.toFixed(1)}% | 连对: ${this.streak} | 智能难度: ${this.difficultyLevel}</div>`;
-        }
-        
-        checkTextManually() { const inputText = this.el.recordingInput.value; if(!inputText || inputText === "🎤 录音中...") { this.showToast("请先录音或粘贴文本"); return; } this.performScoring(inputText, this.currentSentence); }
-        updateDashboard() { document.getElementById('statCapsules').innerText = this.builtinScenes.length + this.customSceneIds.length; document.getElementById('statWordsLearned').innerText = this.customVocabList.length; document.getElementById('statStreak').innerText = `${Math.min(this.streak * 20, 100)}%`; this.el.statsBadge.innerHTML = `🔥 连对 ${this.streak} | 🏆 完美 ${this.perfectCount}`; }
-        
-        initOCR() { const dropzone = document.getElementById('ocrDropzone'); dropzone.onclick = () => document.getElementById('fileInput').click(); document.getElementById('fileInput').onchange = (e) => this.processFile(e.target.files[0]); }
-        async processFile(file) { if(!file) return; const resArea = document.getElementById('ocrResultArea'); const display = document.getElementById('ocrTextDisplay'); resArea.style.display = 'block'; display.innerText = "识别中..."; Tesseract.recognize(file, 'eng').then(({ data: { text } }) => { const filtered = text.replace(/[\u4e00-\u9fa5]/g, '').replace(/\s+/g, ' ').trim(); display.innerText = filtered || "未识别到英文"; this.lastOcr = filtered; }); }
-        addOcrToCustomLibrary() { if(this.lastOcr && this.lastOcr.trim()) { const lines = this.lastOcr.split(/\r?\n/); lines.forEach(line => { if(line.trim()) this.customVocabList.push({ id: Date.now()+Math.random(), text: line.trim() }); }); this.renderCustomVocab(); this.updateDashboard(); this.showToast(`✅ 已添加 ${lines.length} 条内容到词句库，智能轮询已更新`); } else this.showToast("无有效OCR内容"); }
-        addCustomVocabItem() { const val = document.getElementById('newVocabInput').value.trim(); if(!val) return; this.customVocabList.push({ id: Date.now(), text: val }); this.renderCustomVocab(); document.getElementById('newVocabInput').value = ""; this.updateDashboard(); this.showToast("已加入个人词库，将自动进入轮询池"); }
-        renderCustomVocab() { const container = document.getElementById('vocabListContainer'); if(this.customVocabList.length === 0) { container.innerHTML = '<div class="empty-tip">✨ 还没有内容，添加上方的单词或句子开始练习吧～</div>'; return; } container.innerHTML = this.customVocabList.map(item => `<div class="vocab-item"><span class="vocab-text">${item.text}</span><button class="vocab-btn delete" onclick="window.cabin.deleteVocab(${item.id})">🗑️</button></div>`).join(''); }
-        deleteVocab(id) { this.customVocabList = this.customVocabList.filter(i => i.id !== id); this.renderCustomVocab(); this.updateDashboard(); this.showToast("已从词库移除"); }
-        generateCustomScene() { const topic = document.getElementById('customSceneInput').value.trim(); if(!topic) return; const id = `custom_${Date.now()}`; this.corpus[id] = { junior: [`Let's discuss ${topic}.`, `What is your opinion on ${topic}?`], intermediate: [`I have been studying ${topic} deeply.`, `Could you elaborate more about ${topic}?`], advanced: [`The paradigm of ${topic} has evolved significantly.`, `Let's analyze the core principles of ${topic}.`] }; this.customSceneIds.push(id); this.updateDashboard(); this.showToast(`✨ 场景 ${topic} 已生成，请在场景列表点击(需刷新? 可手动点击)`); }
-        showToast(msg) { const t = document.getElementById('toastMsg'); t.innerText = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3000); }
+        // 随机抽取
+        const randomIdx = Math.floor(Math.random() * filtered.length);
+        const selected = filtered[randomIdx];
+        this.updateHistory(historyKey, selected);
+        return selected;
     }
-    window.cabin = new EnglishCabinPro();
-</script>
-</body>
-</html>
+    
+    updateHistory(key, sentence) {
+        if(!this.sceneHistory.has(key)) this.sceneHistory.set(key, []);
+        let hist = this.sceneHistory.get(key);
+        hist.push(sentence);
+        if(hist.length > 15) hist.shift();
+        this.sceneHistory.set(key, hist);
+    }
+
+    loadNewSentence() {
+        this.currentSentence = this.getIntelligentSentence();
+        this.updateDisplaySentence(this.currentSentence);
+        this.el.scorePanelPlaceholder.innerHTML = '';
+    }
+
+    updateDisplaySentence(sentence) {
+        this.el.displaySentence.innerHTML = sentence.split(' ').map(w => `<span class="word-token" data-word="${w.replace(/[.,!?]/g,'').toLowerCase()}">${w}</span>`).join(' ');
+        document.querySelectorAll('.word-token').forEach(t => { t.onclick = () => this.showToast(`📖 ${t.dataset.word}`); });
+    }
+
+    attachEvents() {
+        document.querySelectorAll('.scene-btn[data-scene]').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const oldScene = this.currentScene;
+                this.currentScene = btn.dataset.scene;
+                this.el.sceneLabel.innerText = btn.innerText.replace(/[^a-zA-Z\u4e00-\u9fa5]/g,'');
+                // 加载该场景独立难度
+                this.difficultyLevel = this.sceneDifficultyMap.get(this.currentScene) || "junior";
+                this.updateDifficultyUI();
+                this.loadNewSentence();
+            };
+        });
+        this.el.playSceneVideoBtn.onclick = () => this.playSceneVideo();
+        this.el.nextSentenceBtn.onclick = () => this.loadNewSentence();
+        this.el.playVoiceBtn.onclick = () => this.speakSentence(this.currentSentence);
+        this.el.translateBtn.onclick = () => this.translateSentence();
+        this.el.recordBtn.onclick = () => this.startRecording();
+        this.el.stopBtn.onclick = () => this.stopAndScore();
+        this.el.textCheckBtn.onclick = () => this.checkTextManually();
+        document.getElementById('volRange').oninput = (e) => { document.getElementById('volVal').innerText = e.target.value + '%'; };
+        document.getElementById('customAddBtn').onclick = () => this.generateCustomScene();
+        document.getElementById('addVocabBtn').onclick = () => this.addCustomVocabItem();
+        document.getElementById('adjustDifficultyBtn').onclick = () => this.cycleDifficulty();
+        document.getElementById('addOcrToLibrary').onclick = () => this.addOcrToCustomLibrary();
+    }
+
+    cycleDifficulty() {
+        const levels = ["junior", "intermediate", "advanced"];
+        let idx = levels.indexOf(this.difficultyLevel);
+        idx = (idx+1) % levels.length;
+        this.difficultyLevel = levels[idx];
+        this.sceneDifficultyMap.set(this.currentScene, this.difficultyLevel);
+        this.updateDifficultyUI();
+        this.showToast(`✏️ 难度已切换至 ${this.difficultyLevel === 'junior' ? '基础' : this.difficultyLevel === 'intermediate' ? '中级' : '高级'}`);
+        this.loadNewSentence();
+    }
+
+    updateDifficultyUI() {
+        const levelMap = { junior: "🧘 基础 · 简单对话", intermediate: "⚡ 中级 · 日常表达", advanced: "🔥 高级 · 地道进阶" };
+        this.el.difficultyLabel.innerHTML = `📈 动态难度 · ${levelMap[this.difficultyLevel]}`;
+    }
+
+    playSceneVideo() {
+        if(window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+        this.el.videoSceneBox.className = `video-scene ${this.currentScene}`;
+        this.el.videoDesc.innerHTML = `<div class="chat-bubble">🎬 智能对话: "${this.currentSentence}"</div>`;
+        this.el.avatarIcon.classList.add('avatar-speaking');
+        const words = this.el.displaySentence.querySelectorAll('.word-token');
+        let idx = 0;
+        const clearHighlight = () => words.forEach(w => w.classList.remove('speaking'));
+        const utter = new SpeechSynthesisUtterance(this.currentSentence);
+        utter.voice = this.selectedVoice;
+        const highlightNext = () => {
+            if(idx >= words.length) { this.el.avatarIcon.classList.remove('avatar-speaking'); clearHighlight(); return; }
+            clearHighlight(); words[idx].classList.add('speaking'); idx++; setTimeout(highlightNext, 280);
+        };
+        utter.onstart = () => highlightNext();
+        utter.onend = () => { this.el.avatarIcon.classList.remove('avatar-speaking'); clearHighlight(); };
+        window.speechSynthesis.speak(utter);
+    }
+
+    async loadVoices() { return new Promise(resolve => { const load = () => { const v = speechSynthesis.getVoices(); if (!v.length) { setTimeout(load, 100); return; } this.availableVoices = v.filter(i => i.lang.startsWith('en')); this.selectedVoice = this.availableVoices[0]; this.populateVoiceDropdown(); resolve(); }; load(); }); }
+    populateVoiceDropdown() { this.el.voiceSelector.innerHTML = this.availableVoices.map((v, i) => `<option value="${i}">${v.name}</option>`).join(''); this.el.voiceSelector.onchange = () => { this.selectedVoice = this.availableVoices[parseInt(this.el.voiceSelector.value)]; }; }
+    speakSentence(text) { const utter = new SpeechSynthesisUtterance(text); utter.voice = this.selectedVoice; window.speechSynthesis.cancel(); window.speechSynthesis.speak(utter); }
+    translateSentence() { fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(this.currentSentence)}&langpair=en|zh`).then(r=>r.json()).then(data=>{ this.showToast(`🇨🇳 翻译：${data?.responseData?.translatedText||"失败"}`); }).catch(()=>this.showToast("⚠️ 网络异常")); }
+    setupSpeechRecognition() { const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SpeechRecognition) return; this.recognition = new SpeechRecognition(); this.recognition.lang = 'en-US'; this.recognition.onresult = (e) => { const text = e.results[0][0].transcript; this.el.recordingInput.value = text; this.performScoring(text, this.currentSentence); }; this.recognition.onend = () => { this.isRecording = false; this.updateRecUI(); }; }
+    startRecording() { if(!this.recognition) return this.showToast("浏览器不支持"); this.recognition.start(); this.isRecording = true; this.updateRecUI(); this.el.recordingInput.value = "🎤 录音中..."; }
+    stopAndScore() { this.recognition.stop(); }
+    updateRecUI() { this.el.recordBtn.disabled = this.isRecording; this.el.stopBtn.disabled = !this.isRecording; }
+    
+    performScoring(userText, targetText) {
+        const target = targetText.toLowerCase().replace(/[.,!?;]/g, '').split(' ');
+        const user = userText.toLowerCase().replace(/[.,!?;]/g, '').split(' ');
+        let correct = 0; target.forEach((w, i) => { if(user[i] === w) correct++; });
+        const score = (correct / target.length) * 100;
+        if(score > 80) { this.streak++; this.perfectCount++; } else { this.streak = 0; }
+        this.updateDashboard();
+        // 保存得分到数据库
+        supabase.from('study_records').insert([{ score: Math.round(score), difficulty: this.difficultyLevel }]);
+        // 智能反馈: 更新句子掌握度
+        if(score < 70) {
+            let errCount = this.sentenceErrorMap.get(this.currentSentence) || 0;
+            this.sentenceErrorMap.set(this.currentSentence, errCount + 1);
+            this.showToast(`📉 得分 ${score.toFixed(1)}% , 此句将进入复习队列 (错误+1)`);
+        } else if(score >= 85) {
+            this.sentenceErrorMap.delete(this.currentSentence);
+            this.showToast(`🎉 完美掌握! 得分 ${score.toFixed(1)}%`);
+        } else {
+            this.showToast(`📊 得分 ${score.toFixed(1)}%`);
+        }
+        // 动态难度自适应: 基于最近3次平均表现(简单记忆最近评分)
+        if(!this.scoreHistory) this.scoreHistory = [];
+        this.scoreHistory.push(score);
+        if(this.scoreHistory.length > 3) this.scoreHistory.shift();
+        if(this.scoreHistory.length === 3) {
+            const avg = this.scoreHistory.reduce((a,b)=>a+b,0)/3;
+            const levels = ["junior","intermediate","advanced"];
+            let currentIdx = levels.indexOf(this.difficultyLevel);
+            if(avg > 85 && currentIdx < 2) { this.difficultyLevel = levels[currentIdx+1]; this.sceneDifficultyMap.set(this.currentScene, this.difficultyLevel); this.updateDifficultyUI(); this.showToast(`🚀 智能升级! 难度提升至 ${this.difficultyLevel}`); this.scoreHistory = []; }
+            else if(avg < 50 && currentIdx > 0) { this.difficultyLevel = levels[currentIdx-1]; this.sceneDifficultyMap.set(this.currentScene, this.difficultyLevel); this.updateDifficultyUI(); this.showToast(`📖 智能降级, 难度调整至 ${this.difficultyLevel} , 巩固基础`); this.scoreHistory = []; }
+        }
+        this.el.scorePanelPlaceholder.innerHTML = `<div class="score-detail">🎯 准确率: ${score.toFixed(1)}% | 连对: ${this.streak} | 智能难度: ${this.difficultyLevel}</div>`;
+    }
+    
+    checkTextManually() { const inputText = this.el.recordingInput.value; if(!inputText || inputText === "🎤 录音中...") { this.showToast("请先录音或粘贴文本"); return; } this.performScoring(inputText, this.currentSentence); }
+    updateDashboard() { document.getElementById('statCapsules').innerText = this.builtinScenes.length + this.customSceneIds.length; document.getElementById('statWordsLearned').innerText = this.customVocabList.length; document.getElementById('statStreak').innerText = `${Math.min(this.streak * 20, 100)}%`; this.el.statsBadge.innerHTML = `🔥 连对 ${this.streak} | 🏆 完美 ${this.perfectCount}`; }
+    
+    initOCR() { const dropzone = document.getElementById('ocrDropzone'); dropzone.onclick = () => document.getElementById('fileInput').click(); document.getElementById('fileInput').onchange = (e) => this.processFile(e.target.files[0]); }
+    async processFile(file) { if(!file) return; const resArea = document.getElementById('ocrResultArea'); const display = document.getElementById('ocrTextDisplay'); resArea.style.display = 'block'; display.innerText = "识别中..."; Tesseract.recognize(file, 'eng').then(({ data: { text } }) => { const filtered = text.replace(/[\u4e00-\u9fa5]/g, '').replace(/\s+/g, ' ').trim(); display.innerText = filtered || "未识别到英文"; this.lastOcr = filtered; }); }
+    async addOcrToCustomLibrary() { if(this.lastOcr && this.lastOcr.trim()) { const lines = this.lastOcr.split(/\r?\n/); lines.forEach(async line => { if(line.trim()) { // 保存到数据库 const { data } = await supabase.from('user_vocab').insert([{ content: line.trim() }]).select(); if(data) this.customVocabList.push({ id: data[0].id, text: line.trim() }); } }); this.renderCustomVocab(); this.updateDashboard(); this.showToast(`✅ 已添加 ${lines.length} 条内容到词句库，智能轮询已更新`); } else this.showToast("无有效OCR内容"); }
+    async addCustomVocabItem() { const val = document.getElementById('newVocabInput').value.trim(); if(!val) return; // 保存到数据库 const { data, error } = await supabase.from('user_vocab').insert([{ content: val }]).select(); if(data) { this.customVocabList.push({ id: data[0].id, text: val }); this.renderCustomVocab(); document.getElementById('newVocabInput').value = ""; this.updateDashboard(); this.showToast("已加入个人词库，将自动进入轮询池"); } }
+    renderCustomVocab() { const container = document.getElementById('vocabListContainer'); if(this.customVocabList.length === 0) { container.innerHTML = '<div class="empty-tip">✨ 还没有内容，
