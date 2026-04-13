@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>沉浸式英语舱 · 智能轮询对话版</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
@@ -180,44 +179,31 @@
 <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
-    // ==============================================
-    // 数据库初始化（已填入你的密钥）
-    // ==============================================
-    const supabase = supabase.createClient(
-        "https://pzrcxtiviprrwvmmor.supabase.co",
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6cmN4dGl2aXBycnd2dnhtbW9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwNTE2OTEsImV4cCI6MjA5MTYyNzY5MX0.H6xpLQvJKF4qZhQeuNSfX_Tf0-MDwIpyNOQWTe7MArg"
-    );
-
     class EnglishCabinPro {
         constructor() {
             this.currentSentence = "";
             this.currentScene = "cafe";
-            this.difficultyLevel = "junior";
-            this.sceneDifficultyMap = new Map();
+            this.difficultyLevel = "junior";        // 当前场景动态难度
+            this.sceneDifficultyMap = new Map();    // 每个场景独立难度: 'cafe' -> 'intermediate'
             this.availableVoices = [];
             this.selectedVoice = null;
             this.streak = 0;
             this.perfectCount = 0;
             this.isRecording = false;
-            this.customVocabList = [];
+            this.customVocabList = [];               // { id, text }
             this.builtinScenes = ["cafe", "airport", "shopping", "daily", "office"];
             this.customSceneIds = [];
-            this.sentenceErrorMap = new Map();
-            this.sentenceCorrectMap = new Map();
+            
+            // 智能轮询核心: 句子错误/弱项池 (句子原文 -> 失败次数)
+            this.sentenceErrorMap = new Map();        // 记录评分低于70%的次数
+            this.sentenceCorrectMap = new Map();      // 正确次数（辅助重置错误权重）
+            
+            // 场景历史避免连续重复
             this.sceneHistory = new Map(); 
+            
             this.initCorpus();
             this.init();
             this.initOCR();
-            this.loadVocabFromDB();
-        }
-
-        async loadVocabFromDB() {
-            const { data } = await supabase.from('user_vocab').select('*').order('created_at', { ascending: false });
-            if (data) {
-                this.customVocabList = data.map(i => ({ id: i.id, text: i.content }));
-                this.renderCustomVocab();
-                this.updateDashboard();
-            }
         }
 
         initCorpus() {
@@ -233,6 +219,7 @@
         async init() {
             this.bindDom();
             await this.loadVoices();
+            // 初始化场景难度
             for(let scene of this.builtinScenes) this.sceneDifficultyMap.set(scene, "junior");
             this.difficultyLevel = this.sceneDifficultyMap.get(this.currentScene);
             this.updateDifficultyUI();
@@ -265,20 +252,26 @@
             };
         }
 
+        // 智能轮询核心: 结合内置语料+自定义库+错误优先级
         getIntelligentSentence() {
             const sceneKey = this.currentScene;
             const diff = this.difficultyLevel;
             let baseSentences = [];
             if(this.corpus[sceneKey] && this.corpus[sceneKey][diff]) baseSentences = [...this.corpus[sceneKey][diff]];
             else baseSentences = [];
+            // 加入自定义词句库 (所有自定义内容作为泛场景学习材料)
             const customSentences = this.customVocabList.map(item => item.text).filter(t => t.trim().length > 0);
             let allCandidates = [...baseSentences, ...customSentences];
             if(allCandidates.length === 0) return "Let's practice English!";
+            
+            // 过滤历史（避免连续重复相同句子）
             const historyKey = `${sceneKey}|${diff}`;
             let history = this.sceneHistory.get(historyKey) || [];
             const lastSentence = history.length ? history[history.length-1] : null;
             let filtered = allCandidates.filter(s => s !== lastSentence);
             if(filtered.length === 0) filtered = [...allCandidates];
+            
+            // 错误优先级: 找出错误次数>=1且尚未正确（最近未高分的句子）
             let weakSentences = filtered.filter(s => (this.sentenceErrorMap.get(s) || 0) > 0);
             if(weakSentences.length > 0) {
                 weakSentences.sort((a,b) => (this.sentenceErrorMap.get(b)||0) - (this.sentenceErrorMap.get(a)||0));
@@ -286,6 +279,7 @@
                 this.updateHistory(historyKey, selected);
                 return selected;
             }
+            // 随机抽取
             const randomIdx = Math.floor(Math.random() * filtered.length);
             const selected = filtered[randomIdx];
             this.updateHistory(historyKey, selected);
@@ -319,6 +313,7 @@
                     const oldScene = this.currentScene;
                     this.currentScene = btn.dataset.scene;
                     this.el.sceneLabel.innerText = btn.innerText.replace(/[^a-zA-Z\u4e00-\u9fa5]/g,'');
+                    // 加载该场景独立难度
                     this.difficultyLevel = this.sceneDifficultyMap.get(this.currentScene) || "junior";
                     this.updateDifficultyUI();
                     this.loadNewSentence();
@@ -389,7 +384,7 @@
             const score = (correct / target.length) * 100;
             if(score > 80) { this.streak++; this.perfectCount++; } else { this.streak = 0; }
             this.updateDashboard();
-            supabase.from('study_records').insert([{ score: Math.round(score), difficulty: this.difficultyLevel }]);
+            // 智能反馈: 更新句子掌握度
             if(score < 70) {
                 let errCount = this.sentenceErrorMap.get(this.currentSentence) || 0;
                 this.sentenceErrorMap.set(this.currentSentence, errCount + 1);
@@ -400,6 +395,7 @@
             } else {
                 this.showToast(`📊 得分 ${score.toFixed(1)}%`);
             }
+            // 动态难度自适应: 基于最近3次平均表现(简单记忆最近评分)
             if(!this.scoreHistory) this.scoreHistory = [];
             this.scoreHistory.push(score);
             if(this.scoreHistory.length > 3) this.scoreHistory.shift();
@@ -418,10 +414,10 @@
         
         initOCR() { const dropzone = document.getElementById('ocrDropzone'); dropzone.onclick = () => document.getElementById('fileInput').click(); document.getElementById('fileInput').onchange = (e) => this.processFile(e.target.files[0]); }
         async processFile(file) { if(!file) return; const resArea = document.getElementById('ocrResultArea'); const display = document.getElementById('ocrTextDisplay'); resArea.style.display = 'block'; display.innerText = "识别中..."; Tesseract.recognize(file, 'eng').then(({ data: { text } }) => { const filtered = text.replace(/[\u4e00-\u9fa5]/g, '').replace(/\s+/g, ' ').trim(); display.innerText = filtered || "未识别到英文"; this.lastOcr = filtered; }); }
-        async addOcrToCustomLibrary() { if(this.lastOcr && this.lastOcr.trim()) { const lines = this.lastOcr.split(/\r?\n/); for(const line of lines) { if(line.trim()) { const { data } = await supabase.from('user_vocab').insert([{ content: line.trim() }]).select(); if(data) this.customVocabList.push({ id: data[0].id, text: line.trim() }); } } this.renderCustomVocab(); this.updateDashboard(); this.showToast(`✅ 已添加 ${lines.length} 条内容到词句库，智能轮询已更新`); } else this.showToast("无有效OCR内容"); }
-        async addCustomVocabItem() { const val = document.getElementById('newVocabInput').value.trim(); if(!val) return; const { data } = await supabase.from('user_vocab').insert([{ content: val }]).select(); if(data) { this.customVocabList.push({ id: data[0].id, text: val }); this.renderCustomVocab(); document.getElementById('newVocabInput').value = ""; this.updateDashboard(); this.showToast("已加入个人词库，将自动进入轮询池"); } }
+        addOcrToCustomLibrary() { if(this.lastOcr && this.lastOcr.trim()) { const lines = this.lastOcr.split(/\r?\n/); lines.forEach(line => { if(line.trim()) this.customVocabList.push({ id: Date.now()+Math.random(), text: line.trim() }); }); this.renderCustomVocab(); this.updateDashboard(); this.showToast(`✅ 已添加 ${lines.length} 条内容到词句库，智能轮询已更新`); } else this.showToast("无有效OCR内容"); }
+        addCustomVocabItem() { const val = document.getElementById('newVocabInput').value.trim(); if(!val) return; this.customVocabList.push({ id: Date.now(), text: val }); this.renderCustomVocab(); document.getElementById('newVocabInput').value = ""; this.updateDashboard(); this.showToast("已加入个人词库，将自动进入轮询池"); }
         renderCustomVocab() { const container = document.getElementById('vocabListContainer'); if(this.customVocabList.length === 0) { container.innerHTML = '<div class="empty-tip">✨ 还没有内容，添加上方的单词或句子开始练习吧～</div>'; return; } container.innerHTML = this.customVocabList.map(item => `<div class="vocab-item"><span class="vocab-text">${item.text}</span><button class="vocab-btn delete" onclick="window.cabin.deleteVocab(${item.id})">🗑️</button></div>`).join(''); }
-        async deleteVocab(id) { await supabase.from('user_vocab').delete().match({ id }); this.customVocabList = this.customVocabList.filter(i => i.id !== id); this.renderCustomVocab(); this.updateDashboard(); this.showToast("已从词库移除"); }
+        deleteVocab(id) { this.customVocabList = this.customVocabList.filter(i => i.id !== id); this.renderCustomVocab(); this.updateDashboard(); this.showToast("已从词库移除"); }
         generateCustomScene() { const topic = document.getElementById('customSceneInput').value.trim(); if(!topic) return; const id = `custom_${Date.now()}`; this.corpus[id] = { junior: [`Let's discuss ${topic}.`, `What is your opinion on ${topic}?`], intermediate: [`I have been studying ${topic} deeply.`, `Could you elaborate more about ${topic}?`], advanced: [`The paradigm of ${topic} has evolved significantly.`, `Let's analyze the core principles of ${topic}.`] }; this.customSceneIds.push(id); this.updateDashboard(); this.showToast(`✨ 场景 ${topic} 已生成，请在场景列表点击(需刷新? 可手动点击)`); }
         showToast(msg) { const t = document.getElementById('toastMsg'); t.innerText = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3000); }
     }
